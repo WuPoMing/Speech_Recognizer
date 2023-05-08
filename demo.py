@@ -13,15 +13,24 @@ def center_window(root, width, height):
     size = f'{width}x{height}+{int((screenwidth - width) / 2)}+{int((screenheight - height) / 2)}'
     root.geometry(size)
 
+# Define button to load model
+def load_model():
+    global model
+    global label_speaker
+    model = keras.models.load_model('weights\CNN.h5', compile=False)
+    label_speaker['text'] = 'Model loaded successfully'
+
 def extract_features(audio_data, sample_rate, n_mfcc=13, n_fft=2048, hop_length=512):
     # 將音訊資料轉為 MFCC 特徵
     MFCCs = librosa.feature.mfcc(y=audio_data, sr=sample_rate, n_mfcc=n_mfcc, n_fft=n_fft, hop_length=hop_length)
     return MFCCs.T.tolist()
-
-def button_start():
+    
+def start():
+    global model
+    global label_speaker
+    global stop_recording
     CHUNK_SIZE = 1024
     SAMPLE_RATE = 48000
-    global label_speaker
 
     # Initialize PyAudio
     audio = pyaudio.PyAudio()
@@ -32,12 +41,12 @@ def button_start():
     # Define the labels for the speakers
     labels = ['speaker1', 'speaker2', 'speaker3', 'speaker4', 'speaker5']
 
-    # Load model
-    model = keras.models.load_model('CNN.h5', compile=False)
-
+    stop_recording = False
     while True:
+        if stop_recording:
+            break
         # Read audio data from the stream
-        audio_data = stream.read(4800*3)
+        audio_data = stream.read(SAMPLE_RATE)
 
         # Convert the audio data to a numpy array
         audio_samples = np.frombuffer(audio_data, dtype=np.float32)
@@ -60,16 +69,35 @@ def button_start():
         label_speaker.pack()
         root.update()
 
-# Initialize the GUI
-root = tk.Tk()
-root.title('GUI')
-center_window(root, 600, 400)
+def stop():
+    global stop_recording
+    stop_recording = True
 
-# Create a label to display the speaker's name
-label_speaker = tk.Label(root, text='')
-label_speaker.pack()
+if __name__ == '__main__':
+    # Initialize the GUI
+    root = tk.Tk()
+    root.title('Speaker Recognition')
+    root.configure(bg="#FFFFFF")
+    
+    # Define label for speaker prediction
+    label_speaker = tk.Label(root, text='Press "Start" to begin')
 
-button = tk.Button(root, text='START', command=button_start)
-button.pack()
+    # Define button to load model
+    button_load = tk.Button(root, text='Load Model', command=load_model)
 
-root.mainloop()
+    # Define button to start prediction
+    button_start = tk.Button(root, text='START', command=start)
+
+    # Define button to stop prediction
+    button_stop = tk.Button(root, text='STOP', command=stop)
+
+    center_window(root, 400, 200)
+
+    # Pack GUI elements
+    label_speaker.pack()
+    button_load.pack()
+    button_start.pack()
+    button_stop.pack()
+
+    # Start GUI event loop
+    root.mainloop()
