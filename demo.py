@@ -4,25 +4,32 @@ import tensorflow.keras as keras
 import numpy as np
 import librosa
 import threading
-import warnings
-warnings.filterwarnings("ignore")
+# import warnings
+# warnings.filterwarnings("ignore")
 
 class Speech_Recognizer:
     def __init__(self):
-        self.initGUI()
         self.CHUNK_SIZE = 1024
         self.SAMPLE_RATE = 48000
         self.labels = ['speaker1', 'speaker2', 'speaker3', 'speaker4', 'speaker5']
         self.model = keras.models.load_model('weights/CNN.h5', compile=False)
         self.stop_recording = False
-
+        self.t = threading.Thread(target=self.start)
+        self.lock = threading.Lock()
+        self.initGUI()
+        
     def initGUI(self):
         self.root = tk.Tk()
         self.root.title('Speaker Recognition')
-        self.label_speaker = tk.Label(self.root, text='Press "START" to begin')
-        self.button_start = tk.Button(self.root, text='START', command=threading.Thread(target=self.start).start())
-        self.button_stop = tk.Button(self.root, text='STOP', command=self.stop)
 
+        self.label_speaker = tk.Label(self.root, text='Press "START" to begin')
+        self.label_speaker.pack()
+
+        self.button_start = tk.Button(self.root, text='START', command=self.t.start)
+        self.button_start.pack()
+
+        self.button_stop = tk.Button(self.root, text='STOP', command=self.stop)
+        self.button_stop.pack()
 
     def center_window(self, width, height):
         screenwidth = self.root.winfo_screenwidth()
@@ -34,23 +41,26 @@ class Speech_Recognizer:
         if len(signal) >= sample_rate:
             # ensure consistency of the length of the signal
             signal = signal[:sample_rate]
-            # Convert the audio data to MFCC features
-            MFCCs = librosa.feature.mfcc(y=signal, sr=sample_rate, n_mfcc=n_mfcc, n_fft=n_fft, hop_length=hop_length)
+        # Convert the audio data to MFCC features
+        MFCCs = librosa.feature.mfcc(y=signal, sr=sample_rate, n_mfcc=n_mfcc, n_fft=n_fft, hop_length=hop_length)
         return np.array(MFCCs.T.tolist())
 
     def start(self):
-        # Initialize PyAudio
-        audio = pyaudio.PyAudio()
-
-        # Open an input stream
-        stream = audio.open(format=pyaudio.paFloat32, channels=1, rate=self.SAMPLE_RATE, input=True, frames_per_buffer=self.CHUNK_SIZE)
-
+        self.button_start["state"] = "disable"
         self.stop_recording = False
+        audio = pyaudio.PyAudio()
         while True:
+            stream = audio.open(format=pyaudio.paFloat32, channels=1, rate=self.SAMPLE_RATE, input=True, frames_per_buffer=self.CHUNK_SIZE)
+            self.lock.acquire()
             if self.stop_recording:
-                break
+                self.button_stop["text"] = "繼續"
+                self.label_speaker['text'] = '暫停'
+                self.lock.release()
+                continue
+            self.button_stop["text"] = '暫停'
+
             # Read audio data from the stream
-            audio_data = stream.read(self.SAMPLE_RATE)
+            audio_data = stream.read(self.SAMPLE_RATE, exception_on_overflow=False)
 
             # Convert the audio data to a numpy array
             audio_samples = np.frombuffer(audio_data, dtype=np.float32)
@@ -67,23 +77,23 @@ class Speech_Recognizer:
             predicted_label = self.labels[predicted_label_index]
 
             # Update the label text
-            self.label_speaker['text'] = 'The speaker is: ' + predicted_label
+            self.label_speaker['text'] = f'The speaker is: {predicted_label}, {prediction[0][predicted_label_index]*100:.3f}'
+            self.label_speaker.pack()
 
             # Update the GUI
-            self.label_speaker.pack()
             self.root.update()
+            self.lock.release()
 
     def stop(self):
-        self.stop_recording = True
-        self.label_speaker['text'] = '暫停'
+        if self.stop_recording:
+            self.stop_recording = False
+            self.label_speaker['text'] = 'recording...'
+        else:
+            self.stop_recording = True
+            print("stop")
 
     def run(self):
         self.center_window(400, 200)
-
-        # Pack GUI elements
-        self.label_speaker.pack()
-        self.button_start.pack()
-        self.button_stop.pack()
 
         # Start GUI event loop
         self.root.mainloop()
