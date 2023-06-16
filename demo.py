@@ -10,7 +10,7 @@ import threading
 class Speech_Recognizer:
     def __init__(self):
         self.CHUNK_SIZE = 1024
-        self.SAMPLE_RATE = 48000
+        self.SAMPLE_RATE = 48000*2
         self.labels = ['speaker1', 'speaker2', 'speaker3', 'speaker4', 'speaker5']
         self.model = keras.models.load_model('weights/CNN.h5', compile=False)
         self.stop_recording = False
